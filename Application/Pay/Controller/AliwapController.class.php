@@ -7,6 +7,8 @@
  */
 namespace Pay\Controller;
 
+use Think\Log;
+
 class AliwapController extends PayController
 {
     public function __construct()
@@ -46,7 +48,7 @@ class AliwapController extends PayController
             'out_trade_no' => $return['orderid'],
             'total_amount' => $return['amount'],
             'subject'      => $return['subject'],
-            'product_code' => "FAST_INSTANT_TRADE_PAY",
+            'product_code' => "QUICK_WAP_WAY",
         ];
 
         $sysParams               = json_encode($data, JSON_UNESCAPED_UNICODE);
@@ -59,7 +61,7 @@ class AliwapController extends PayController
         $aop->signType           = 'RSA2';
         $aop->postCharset        = 'UTF-8';
         $aop->format             = 'json';
-        $aop->debugInfo          = true;
+        $aop->debugInfo          = false;
         $request                 = new \AlipayTradeWapPayRequest();
         $request->setBizContent($sysParams);
         $request->setNotifyUrl($notifyurl);
@@ -68,7 +70,8 @@ class AliwapController extends PayController
         $info['pay_url'] = $pay_url;
         $info['order_sn'] = $orderid;
         $result = json_encode(['status' => 'success', 'msg' => '创建成功', 'data' => $info]);
-        return $result;
+        echo $result;
+        exit;
     }
 
 
@@ -84,11 +87,24 @@ class AliwapController extends PayController
             exit("交易成功！");
         }
     }
+    public function writeLog($message, $maxFileSize = 1048576) { // 1MB
+        $logFile = './app.log';
+        $timestamp = date('Y-m-d H:i:s');
+        $logContent = "[{$timestamp}] {$message}\n";
+
+        // 检查文件大小，如果超过限制则重命名旧文件
+        if (file_exists($logFile) && filesize($logFile) > $maxFileSize) {
+            rename($logFile, $logFile . '.' . date('Y-m-d-H-i-s'));
+        }
+
+        file_put_contents($logFile, $logContent, FILE_APPEND | LOCK_EX);
+    }
 
     //异步通知
     public function notifyurl()
     {
         $response  = $_POST;
+        $this->writeLog('接口回调：'.json_encode($response));
         $sign      = $response['sign'];
         $sign_type = $response['sign_type'];
         $outno=I('post.out_trade_no/s');

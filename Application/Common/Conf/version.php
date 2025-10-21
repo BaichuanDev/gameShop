@@ -7,7 +7,7 @@
  */
 
 return array(
-    'UPDATE_URL'=>'http://qswpay.local.com',
+    'UPDATE_URL'=>'https://game.iyips.com',
     'SOFT_NAME'=>'柒上网络支付系统',
     'SOFT_VERSION'=>'2.0.5'
 );
