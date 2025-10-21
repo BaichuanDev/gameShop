@@ -18,7 +18,7 @@ class AliwapController extends PayController
     public function Pay($array)
     {
         $orderid     = I("request.pay_orderid");
-        $body        = I('request.pay_productname');
+        $body        = '游戏礼包-'.$orderid;
         $notifyurl   = $this->_site . 'Pay_Aliwap_notifyurl.html'; //异步通知
         $callbackurl = $this->_site . 'Pay_Aliwap_callbackurl.html'; //返回通知
 
@@ -60,14 +60,15 @@ class AliwapController extends PayController
         $aop->postCharset        = 'UTF-8';
         $aop->format             = 'json';
         $aop->debugInfo          = true;
-      $request                 = new \AlipayTradeWapPayRequest();
+        $request                 = new \AlipayTradeWapPayRequest();
         $request->setBizContent($sysParams);
         $request->setNotifyUrl($notifyurl);
         $request->setReturnUrl($callbackurl);
-        $result = $aop->pageExecute($request,'post');
-        echo $result;
-
-    
+        $pay_url = $aop->pageExecute($request,'get');
+        $info['pay_url'] = $pay_url;
+        $info['order_sn'] = $orderid;
+        $result = json_encode(['status' => 'success', 'msg' => '创建成功', 'data' => $info]);
+        return $result;
     }
 
 
