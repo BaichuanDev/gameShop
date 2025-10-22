@@ -87,14 +87,24 @@ class AliwapController extends PayController
             exit("交易成功！");
         }
     }
-    public function writeLog($message, $maxFileSize = 1048576) { // 1MB
-        $logFile = './app.log';
+    public function writeLog($message, $maxFileSize = 1048576) {
+        // 使用框架定义的 LOG_PATH 常量，确保路径正确
+        $logDir = LOG_PATH . 'Pay/';  // 在 Logs 下创建 Pay 子目录
+
+        // 使用和框架一致的日期格式 y_m_d
+        $logFile = $logDir . 'pay_'.date('y_m_d') . '.log';
+
+        // 确保目录存在
+        if (!is_dir($logDir)) {
+            mkdir($logDir, 0755, true);
+        }
+
         $timestamp = date('Y-m-d H:i:s');
         $logContent = "[{$timestamp}] {$message}\n";
 
-        // 检查文件大小，如果超过限制则重命名旧文件
+        // 文件大小检查（可选，因为每天自动创建新文件）
         if (file_exists($logFile) && filesize($logFile) > $maxFileSize) {
-            rename($logFile, $logFile . '.' . date('Y-m-d-H-i-s'));
+            rename($logFile, $logFile . '.' . date('H-i-s'));
         }
 
         file_put_contents($logFile, $logContent, FILE_APPEND | LOCK_EX);
@@ -104,7 +114,6 @@ class AliwapController extends PayController
     public function notifyurl()
     {
         $response  = $_POST;
-        $this->writeLog('接口回调：'.json_encode($response));
         $sign      = $response['sign'];
         $sign_type = $response['sign_type'];
         $outno=I('post.out_trade_no/s');
