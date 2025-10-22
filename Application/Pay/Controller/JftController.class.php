@@ -25,7 +25,17 @@ class JftController extends PayController
     }
 
 
+    public function With()
+    {
+        $response = $_GET;
+        $targetUrl = $this->_site.'Pay_Jft_index?money='.$response;
+        // URL编码目标URL
+        $encodedUrl = urlencode($targetUrl);
 
+        // 构造支付宝跳转URL
+        $alipayUrl = "alipayqr://platformapi/startapp?appId=20000136&saferUrl=" . $encodedUrl;
+        return $alipayUrl;
+    }
 
     public function Wap()
     {
