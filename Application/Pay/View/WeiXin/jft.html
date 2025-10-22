@@ -1,0 +1,354 @@
+
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=0">
+    <title>收银台</title>
+    <script type="text/javascript" src="./Public/zfb/qiswl/jquery.min.js"></script>
+    <script type="text/javascript" src="./Public/zfb/qiswl/layer/layer.js"></script>
+    <link rel="stylesheet" href="./Public/zfb/qiswl/layer.css?v=3.1.1" id="layuicss-layer">
+    <script type="text/javascript" src="./Public/zfb/qiswl/jquery.qrcode.js"></script>
+    <script type="text/javascript" src="./Public/zfb/qiswl/js/jft.js"></script>
+    <style>
+        html,body{height:100%;width:100%;}
+        body {background: #EEEEED;}
+        html,body,div,span,h1,h2,h3,h4,h5,h6,p,em,font,img,dl,dt,dd,ol,ul,li,fieldset,form,label,
+        tbody,tfoot,thead,tr,th,td ,input{margin:0;padding:0;outline:0}
+        a,fieldset,img{border:0;margin:0px;padding:0px;}
+        :focus{outline:0}
+        a,input,input:focus{ -webkit-tap-highlight-color:rgba(0,0,0,0);/*-webkit-user-modify:read-write-plaintext-only;*/}
+        body{min-width:320px;font-family:"微软雅黑";color:#333;font-size:14px;}
+        ol,ul{list-style:none}
+        h1,h2,h3,h4,h5,h6,button,input,select,textarea{font-size:100%;font-weight:normal}
+        table{border-collapse:collapse;border-spacing:0}
+        input,button,img{vertical-align:middle;border:none;outline:0;}
+        a{text-decoration:none;color:#fff;cursor:pointer}
+        a:hover{}
+        .fix{*zoom:1}
+        .fix:after{clear:both;content:" ";display:block;height:0;visibility:hidden;overflow:hidden}
+        .contain{
+            width:94%;margin:0 auto;
+        }
+        .wrap{
+            min-width:320px;max-width:640px;margin:0px auto;
+        }
+        .moneypaid{
+            margin-left: auto;
+            margin-right: auto;
+            margin-top: 20px;
+            width:94%;
+            height: 100vh;
+            /*height: 245px;*/
+            background: #fff;
+            border-radius: 1px;
+        }
+        .moneypaid .moneynum{
+            font-size:28px;text-align:center;color:#000;
+            margin:1rem 0px;
+        }
+        .moneypaid .line{
+            width:94%;
+            margin:0 auto;
+            height:45px;
+            line-height:45px;
+            font-size:15px;
+            clear: both;
+        }
+        .moneypaid .line .cone{
+            width:94%;margin:0px auto;font-size:15px;clear: both;border-top: 1px solid #EEEFEF;
+        }
+        .moneypaid .cone .word{
+            float:left;color:#576B95;
+        }
+        .moneypaid .cone .name{
+            float:right;
+            margin-right: 10px;
+        }
+        .moneypaid .paidbtn{
+            height:42px;
+            line-height:42px;width:94%;
+            margin:20px 3% 0px;border:none;
+            color:#fff;font-size:15px;border-radius:5px;
+            text-align:center;background:#06bf04;
+        }
+        .ws-mark {
+            margin-left: 10px;
+            width: 80%;
+            height: 42px;
+            line-height: 42px;
+            font-size:15px;
+            text-align: left;
+        }
+        .ws-title {
+            padding-top: 25px;
+            font-size: 14px;
+            color: #B3B3B3;
+            text-align: center;
+        }
+        #amount {
+            font-size: 45px;
+        }
+        .top{
+            display: flex;
+            align-items: center;
+            padding-top: 1rem;
+            /*justify-content: center;*/
+
+        }
+        .img { width: 4rem;height: 4rem;border-radius: 50%;margin-left: 1rem }
+        .name{
+            margin-left: 1rem;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="moneypaid">
+    <div class="cone top">
+        收银台
+    </div>
+    <div class="ws-title">支付金额</div>
+    <div class="moneynum" >￥<span id="amount"><{$money}></span></div>
+    <div class="center">
+        <div class="line">
+            <input type="hidden" name="cid" id="cid" value="290329">
+            <input type="hidden" name="token" id="token" value="vigpuk1760521609">
+            <button class="paidbtn btn" onClick="weixinpayfree()">立即支付</button>
+        </div>
+    </div>
+</div>
+<!--<script src="./../tpl/Wap/default/common/CustomerPay/lib.ed3ddad9.bank.js"></script>-->
+</body>
+</html>
+<script type="text/javascript">
+    function weixinpayfree() {
+        var remarks= $('#remarks').val();
+        var is_remark = $('#is_remark').val();
+        if (is_remark== 1){
+            if (remarks.length<=0){
+                alert('备注必填');
+                return false;
+            }
+        }
+        if($('#amount').text()<0.01)
+        {
+            alert('金额不能为空');
+            return false;
+        }
+        pay_now();
+    }
+
+    function pay_now() {
+        if(window.paybtnflag == true){
+            //return;
+        }
+        window.paybtnflag = true;
+        var userAgent = navigator.userAgent.toLowerCase();
+        console.log(userAgent);
+        var rate_set_id = $("#rate_set_id").val();
+        var b = {};
+        b.payfreemoney = $("#amount").text();
+        var  hbFqMoney = $("#amount").attr("hbFqMoney");
+        if(!hbFqMoney){
+            hbFqMoney = 100;
+        }
+
+
+        if(userAgent.match(/alipay/i)=="alipay"  && rate_set_id !=126 &&  rate_set_id !=123  ){
+            //支付宝支付(服务端支付)
+            if($("#userId").val() !="")
+            {
+                    b.token = $("#token").val(),
+                    b.wecha_id = $("#wecha_id").val(),
+                    b.cid = $("#cid").val(),
+                    b.remarks = $("#remarks").val(),
+                    b.cashiername = $("#cashiername").val(),
+                    b.zfb_user_id = $("#zfb_user_id").val(),
+                    b.pay_type = $("#pay_type").val(),
+                    b.userId = $("#userId").val(),
+                    b.rate_set_id = $("#rate_set_id").val(),
+                    $.ajax({
+                        type: "GET",
+                        url:'<{:U("Pay/Jft/Wap")}>',
+                        data: b,
+                        dataType: 'json',
+                        success: function(obj) {
+                            if((typeof yilingUnipayment!=="undefined") && yilingUnipayment.payment(obj) == true){
+                                return true;
+                            }
+                            if (obj.status>0) {
+                                alipayFwc(obj);
+                            } else {
+                                alert(obj.msg);
+                                window.paybtnflag = false;
+                                return false;
+                            }
+
+                        }
+                    });
+                return false;
+            }else{
+                b.token = $("#token").val(),
+                    b.wecha_id = $("#wecha_id").val(),
+                    b.cid = $("#cid").val(),
+                    b.remarks = $("#remarks").val(),
+                    b.cashiername = $("#cashiername").val(),
+                    b.zfb_user_id = $("#zfb_user_id").val(),
+                    b.pay_type = $("#pay_type").val(),
+                    b.rate_set_id = $("#rate_set_id").val(),
+                    $.ajax({
+                        url: '/wxpay/index.php?g=Wap&m=WeixinfreeBank&a=new_pay&online=1',
+                        type: "get",
+                        data: b,
+                        beforeSend: function () {
+                            $("#pay").removeClass("active"),
+                                $("#loading").show()
+                        },
+                        success: function (response) {
+                            var data = eval("(" + response + ")");
+                            //错误提示
+                            if (data.code == 2) {
+                                alert(data.msg)
+                                window.paybtnflag = false;
+                                return false;
+                            }
+                            // 去 支付宝 支付 需要跳转链接发起支付.
+                            if(rate_set_id ==126 ||  rate_set_id ==123 && data.type == "alifwc"){
+                                window.location.replace(data.url);
+                            }
+                            if((typeof yilingUnipayment!=="undefined") && yilingUnipayment.payment(data) == true){
+                                return true;
+                            }
+                            //微信支付
+                            if (data.type == "weixin") safeCall(function () {
+                                var weixin_data = eval("(" + data.data + ")");
+                                pay(weixin_data);
+                            });
+                            else if (data.type == "alifwc" || data.type=="alipay_jspay") { // 支付宝 jspay
+                                alipayFwc(data);
+                            }else if(!data.url){
+                                alert("跳转支付失败!"+data.result_msg);
+                            }
+                            else { //支付宝或银行线下支付
+                                window.location.replace(data.url);
+
+                            }
+
+                        },
+                        complete: function () {
+                            $("#loading").hide(),
+                                $("#pay").addClass("active")
+                        },
+                        error: function (a) {
+                            window.paybtnflag = false;
+                            $("#loading").hide(),
+                                $("#pay").addClass("active"),
+                                alert("2网络不好，请稍后重试!!!"),
+                                safeCall(function () {
+                                    WeixinJSBridge.invoke("closeWindow", {},
+                                        function (a) {
+                                        })
+                                })
+                        }
+                    })
+            }
+
+        }else{
+            b.token = $("#token").val(),
+                b.wecha_id = $("#wecha_id").val(),
+                b.cid = $("#cid").val(),
+                b.remarks = $("#remarks").val(),
+                b.cashiername = $("#cashiername").val(),
+                b.zfb_user_id = $("#zfb_user_id").val(),
+                b.pay_type = $("#pay_type").val(),
+                b.rate_set_id = $("#rate_set_id").val(),
+                b.userId = $("#userId").val(),
+                b.payCode = $("#payCode").val(),
+                $.ajax({
+                    url: '/wxpay/index.php?g=Wap&m=WeixinfreeBank&a=new_pay&online=1&version=3.0',
+                    type: "get",
+                    data: b,
+                    beforeSend: function () {
+                        $("#pay").removeClass("active"),
+                            $("#loading").show()
+                    },
+                    success: function (data) {
+                        var a = eval("(" + data + ")");
+                        //错误提示
+                        if (a.code == 2) {
+                            alert(a.msg);
+                            window.paybtnflag = false;
+                            return false;
+                        }
+                        if((typeof yilingUnipayment!=="undefined") && yilingUnipayment.payment(a) == true){
+                            return true;
+                        }
+                        //微信支付
+                        if (a.type == "weixin") safeCall(function () {
+                            var obj2 = eval("(" + a.data + ")");
+                            pay(obj2)
+                        });
+                        else if (a.type == "alifwc") { // 支付宝服务端
+                            alipayFwc(a);
+                        }
+                        else { //支付宝或银行线下支付
+                            window.location.replace(a.url)
+                        }
+
+                    },
+                    complete: function () {
+                        $("#loading").hide(),
+                            $("#pay").addClass("active")
+                    },
+                    error: function (a) {
+                        window.paybtnflag = false;
+                        $("#loading").hide(),
+                            $("#pay").addClass("active"),
+                            alert("1网络不好，请稍后重试!!!"),
+                            safeCall(function () {
+                                WeixinJSBridge.invoke("closeWindow", {},
+                                    function (a) {
+                                    })
+                            })
+                    }
+                })
+        }
+    }
+    function alipayFwc(ali) {
+        AlipayJSBridge.call("tradePay",{
+            tradeNO: ali.trade_no
+        }, function(result){
+            setTimeout(function(){window.paybtnflag = false;}, 1000);
+            if(!result){
+                alert("支付系统异常，请稍后重试!");
+                return false;
+            }
+            var resultMsgArr = new Array();
+            resultMsgArr['8000'] = '后台获取支付结果超时，暂时未收到支付结果';
+            resultMsgArr['6004'] = '支付过程中网络出错，暂时未收到支付结果';
+            resultMsgArr['7001'] = '客户端-包裹中止支付';
+            resultMsgArr['6002']='网络出错';
+            resultMsgArr['4000']='订单支付失败';
+            resultMsgArr['99']='用户点击记住密码快捷页面';
+            if(result.resultCode =='6001'){//1.用户中途取消
+                failNotify(ali.failNotifyUrl);
+                return false;
+            }
+            if(result.resultCode =='9000'){//2.支付完成跳转
+                window.location.href=ali.url2;
+                return false;
+            }
+            if(resultMsgArr.hasOwnProperty(result.resultCode)){//3.支付异常处理
+                alert(resultMsgArr[result.resultCode])
+                return false;
+            }
+            if(!resultMsgArr.hasOwnProperty(result.resultCode)){//4.未知异常处理
+                alert("其他支付异常");
+                return false;
+            }
+        });
+    }
+
+</script>
