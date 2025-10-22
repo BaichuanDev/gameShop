@@ -274,8 +274,8 @@ class AliwapController extends PayController
                 return true;
             }else{
                 // 退款失败
-                $msg = $responseResult->$responseNode->msg ?? '未知错误';
-                $subMsg = $responseResult->$responseNode->sub_msg ?? '';
+                $msg = isset($responseResult->$responseNode->msg) ? $responseResult->$responseNode->msg : '未知错误';
+                $subMsg = isset($responseResult->$responseNode->sub_msg) ? $responseResult->$responseNode->sub_msg : '';
                 $this->writeLog("退款失败: 订单{$return['orderid']}, code:{$resultCode}, msg:{$msg}, sub_msg:{$subMsg}");
                 return false;
             }
