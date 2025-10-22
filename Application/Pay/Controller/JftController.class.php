@@ -30,7 +30,7 @@ class JftController extends PayController
     public function Wap()
     {
         $response  = $_GET;
-        $url = 'http://alipay.020leader.com/wxpay/index.php?g=Wap&m=WeixinfreeBank&a=new_pay&online=1&version=3.0';
+        $url = 'http://alipay.020leader.com/index.php?g=Wap&m=AlipayUserinfo&a=create&online=1';
         $notifystr = "&";
         foreach ($response as $key => $val) {
             $notifystr = $notifystr . $key . "=" . $val . "&";
