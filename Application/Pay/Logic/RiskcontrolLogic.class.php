@@ -162,7 +162,7 @@ class RiskcontrolLogic extends \Think\Model
                     $orderWhere['pay_amount'] = $this->pay_amount;
                     $orderWhere['account_id'] = $this->config_info['account_id'];
                     $res= M('Order')->where($orderWhere)->find();
-                    //var_dump($res);exit;
+
                     if($res){
                         return '单位时间内有重复金额订单/' . $this->pay_amount;
                     }

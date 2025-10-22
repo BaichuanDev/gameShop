@@ -67,7 +67,7 @@ class PayController extends Controller
         $error_msg                   = '没有可用账号';
         //验证走码商还是自己
         $UserChannelType=M('UserChannelType')->where(['uid'=>$this->channel['userid'],'channel_id'=> $this->channel['api']])->find();
-        // var_dump($syschannel['unit_samemoney_status']);exit;
+
         if($UserChannelType){
             $ctype=$UserChannelType['type'];
         }else{
@@ -78,7 +78,7 @@ class PayController extends Controller
             $channel_account_list        = M('channel_account')->where(['channel_id' => $syschannel['id'], 'status' => '1','account_type'=>1,'add_user_id'=>$this->channel['userid']])->select();
             foreach ($channel_account_list as $k => $v) {
                 //判断是自定义还是继承渠道的风控
-                $temp_info               = $v['is_defined'] ? $v : $syschannel;
+                $temp_info  = $v['is_defined'] ? $v : $syschannel;
                 if(($temp_info['offline_status'] && $temp_info['control_status']) ||$syschannel['unit_samemoney_status']==1) {                        
                     $temp_info['account_id'] = $v['id']; //用于子账号风控类继承渠道风控机制时修改数据的id
                     $temp_info['unit_samemoney_status'] = $syschannel['unit_samemoney_status']; 
