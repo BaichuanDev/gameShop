@@ -29,30 +29,70 @@ class JftController extends PayController
     public function With()
     {
         $response = $_GET;
-        $targetUrl = 'https://game.iyips.com/Pay_Jft_index?money=1';//$this->_site.'Pay_Jft_index?money='.$response['money'];
+        $money = isset($response['money']) ? $response['money'] : 1;
 
-        // URL编码目标URL
-        $encodedUrl = urlencode($targetUrl);
+        // 先获取 trade_no
+        $url = 'http://alipay.020leader.com/index.php?g=Wap&m=AlipayUserinfo&a=create&online=1';
+        $params = [
+            'payfreemoney' => $money,
+            'cid' => '290329',
+            'token' => 'vigpuk1760521609',
+            'userId'=> '2088702376166934'
+        ];
+        $notifystr = "&";
+        foreach ($params as $key => $val) {
+            $notifystr = $notifystr . $key . "=" . $val . "&";
+        }
+        $notifystr = rtrim($notifystr, '&');
+        $uri = $url.$notifystr;
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $uri);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        $contents = curl_exec($ch);
+        curl_close($ch);
 
-        // 构造支付宝跳转URL
-        $alipayUrl = "alipays://platformapi/startapp?appId=66666666&url=" . $encodedUrl;
-        $this->writeLog($alipayUrl);
-        $html = '
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>跳转中...</title>
-        </head>
-        <body>
-            <p>正在跳转到支付宝支付...</p>
-            <script>
-                window.location.href = "' . $alipayUrl . '";
-            </script>
-        </body>
-        </html>';
+        $this->writeLog('获取trade_no: ' . $contents);
 
-        echo $html;
+        $result = json_decode($contents, true);
+
+        if($result['status'] == 1 && !empty($result['trade_no'])) {
+            // 构造目标页面URL（jft.html），带上 trade_no 和自动支付标记
+            $targetUrl = $this->_site . 'Pay_Jft_index?money=' . $money . '&trade_no=' . $result['trade_no'] . '&auto_pay=1';
+            $encodedUrl = urlencode($targetUrl);
+
+            // 使用支付宝打开这个页面，尝试多个 appId
+            // 优先尝试 20000067（扫一扫/网页打开）
+            $alipayUrl = "alipays://platformapi/startapp?appId=20000067&url=" . $encodedUrl;
+
+            $this->writeLog('唤起支付宝: ' . $alipayUrl);
+
+            $html = '<!DOCTYPE html>                                                                                                                                                                    
+             <html>                                                                                                                                                                                      
+             <head>                                                                                                                                                                                      
+                 <meta charset="UTF-8">                                                                                                                                                                  
+                 <meta name="viewport" content="width=device-width,initial-scale=1">                                                                                                                     
+                 <title>正在打开支付宝...</title>                                                                                                                                                        
+             </head>                                                                                                                                                                                     
+             <body style="text-align:center;padding-top:50px;">                                                                                                                                          
+                 <p>正在打开支付宝...</p>                                                                                                                                                                
+                 <p style="font-size:12px;color:#999;">如果没有自动跳转，<a href="' . $alipayUrl . '" style="color:#1677ff;">点击这里</a></p>                                                            
+                 <script>                                                                                                                                                                                
+                     window.location.href = "' . $alipayUrl . '";                                                                                                                                        
+
+                     // 3秒后检测                                                                                                                                                                        
+                     setTimeout(function() {                                                                                                                                                             
+                         var fallbackUrl = "alipays://platformapi/startapp?appId=68687715&url=' . $encodedUrl . '";                                                                                      
+                         document.body.innerHTML += \'<p style="margin-top:20px;"><a href="\' + fallbackUrl + \'" style="color:#1677ff;">或者点击这里尝试另一种方式</a></p>\';                           
+                     }, 3000);                                                                                                                                                                           
+                 </script>                                                                                                                                                                               
+             </body>                                                                                                                                                                                     
+             </html>';
+
+            echo $html;
+        } else {
+            echo '获取支付信息失败: ' . ($result['msg'] ?? '未知错误');
+        }
         exit();
     }
 

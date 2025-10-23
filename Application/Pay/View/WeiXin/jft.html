@@ -123,21 +123,12 @@
 </body>
 </html>
 <script type="text/javascript">
-    function weixinpayfree() {
-        var remarks= $('#remarks').val();
-        var is_remark = $('#is_remark').val();
-        if (is_remark== 1){
-            if (remarks.length<=0){
-                alert('备注必填');
-                return false;
-            }
-        }
-        if($('#amount').text()<0.01)
-        {
-            alert('金额不能为空');
-            return false;
-        }
-        pay_now();
+    // 获取URL参数
+    function getUrlParam(name) {
+        var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)");
+        var r = window.location.search.substr(1).match(reg);
+        if (r != null) return decodeURIComponent(r[2]);
+        return null;
     }
 
     function pay_now() {
@@ -364,5 +355,48 @@
             });
         });
     }
+    // 页面加载完成后检查是否需要自动支付
+    $(document).ready(function() {
+        console.log('页面加载完成，当前URL:', window.location.href);
 
+        var auto_pay = getUrlParam('auto_pay');
+        var trade_no = getUrlParam('trade_no');
+        var money = getUrlParam('money');
+
+        console.log('auto_pay:', auto_pay, 'trade_no:', trade_no, 'money:', money);
+
+        // 如果有自动支付标记和 trade_no
+        if(auto_pay == '1' && trade_no) {
+            console.log('检测到自动支付参数，准备拉起支付...');
+
+            // 更新页面金额显示
+            if(money) {
+                $('#amount').text(money);
+            }
+
+            // 检测是否在支付宝环境
+            var userAgent = navigator.userAgent.toLowerCase();
+            var isAlipay = userAgent.indexOf('alipay') > -1;
+
+            console.log('userAgent:', userAgent, 'isAlipay:', isAlipay);
+
+            if(isAlipay) {
+                // 在支付宝内，等待500ms让页面完全加载，然后自动拉起支付
+                setTimeout(function() {
+                    console.log('开始自动拉起支付...');
+                    var payData = {
+                        status: 1,
+                        trade_no: trade_no,
+                        url2: window.location.origin + '/pay_success.php',  // 成功后跳转
+                        failNotifyUrl: window.location.origin + '/pay_fail.php'  // 失败通知
+                    };
+
+                    // 调用支付
+                    alipayFwc(payData);
+                }, 500);
+            } else {
+                alert('请在支付宝中打开此页面');
+            }
+        }
+    });
 </script>
