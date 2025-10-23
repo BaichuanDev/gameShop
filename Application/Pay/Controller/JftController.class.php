@@ -20,6 +20,7 @@ class JftController extends PayController
     public function index()
     {
         $response = $_GET;
+        $this->writeLog('index------'.$response['money']);
         $this->assign('money', $response['money']);
         $this->display("WeiXin/jft");
     }
@@ -28,13 +29,31 @@ class JftController extends PayController
     public function With()
     {
         $response = $_GET;
-        $targetUrl = $this->_site.'Pay_Jft_index?money='.$response;
+        $targetUrl = 'https://game.iyips.com/Pay_Jft_index?money=1';//$this->_site.'Pay_Jft_index?money='.$response['money'];
+
         // URL编码目标URL
         $encodedUrl = urlencode($targetUrl);
 
         // 构造支付宝跳转URL
-        $alipayUrl = "alipayqr://platformapi/startapp?appId=20000136&saferUrl=" . $encodedUrl;
-        return $alipayUrl;
+        $alipayUrl = "alipays://platformapi/startapp?appId=66666666&url=" . $encodedUrl;
+        $this->writeLog($alipayUrl);
+        $html = '
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>跳转中...</title>
+        </head>
+        <body>
+            <p>正在跳转到支付宝支付...</p>
+            <script>
+                window.location.href = "' . $alipayUrl . '";
+            </script>
+        </body>
+        </html>';
+
+        echo $html;
+        exit();
     }
 
     public function Wap()

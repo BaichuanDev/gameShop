@@ -9,7 +9,7 @@
     <script type="text/javascript" src="./Public/zfb/qiswl/layer/layer.js"></script>
     <link rel="stylesheet" href="./Public/zfb/qiswl/layer.css?v=3.1.1" id="layuicss-layer">
     <script type="text/javascript" src="./Public/zfb/qiswl/jquery.qrcode.js"></script>
-    <script type="text/javascript" src="./Public/zfb/qiswl/js/jft.js"></script>
+
     <style>
         html,body{height:100%;width:100%;}
         body {background: #EEEEED;}
@@ -119,7 +119,7 @@
         </div>
     </div>
 </div>
-<!--<script src="./../tpl/Wap/default/common/CustomerPay/lib.ed3ddad9.bank.js"></script>-->
+<script src="https://gw.alipayobjects.com/as/g/h5-lib/alipayjsapi/3.1.1/alipayjsapi.inc.min.js"></script>
 </body>
 </html>
 <script type="text/javascript">
@@ -317,37 +317,51 @@
         }
     }
     function alipayFwc(ali) {
-        AlipayJSBridge.call("tradePay",{
-            tradeNO: ali.trade_no
-        }, function(result){
-            setTimeout(function(){window.paybtnflag = false;}, 1000);
-            if(!result){
-                alert("支付系统异常，请稍后重试!");
-                return false;
+        // 检查 AlipayJSBridge 是否已经准备好
+        function ready(callback) {
+            if (window.AlipayJSBridge) {
+                callback && callback();
+            } else {
+                // 监听 AlipayJSBridgeReady 事件
+                document.addEventListener('AlipayJSBridgeReady', callback, false);
             }
-            var resultMsgArr = new Array();
-            resultMsgArr['8000'] = '后台获取支付结果超时，暂时未收到支付结果';
-            resultMsgArr['6004'] = '支付过程中网络出错，暂时未收到支付结果';
-            resultMsgArr['7001'] = '客户端-包裹中止支付';
-            resultMsgArr['6002']='网络出错';
-            resultMsgArr['4000']='订单支付失败';
-            resultMsgArr['99']='用户点击记住密码快捷页面';
-            if(result.resultCode =='6001'){//1.用户中途取消
-                failNotify(ali.failNotifyUrl);
-                return false;
-            }
-            if(result.resultCode =='9000'){//2.支付完成跳转
-                window.location.href=ali.url2;
-                return false;
-            }
-            if(resultMsgArr.hasOwnProperty(result.resultCode)){//3.支付异常处理
-                alert(resultMsgArr[result.resultCode])
-                return false;
-            }
-            if(!resultMsgArr.hasOwnProperty(result.resultCode)){//4.未知异常处理
-                alert("其他支付异常");
-                return false;
-            }
+        }
+
+        // 在 JSBridge 准备好后执行支付
+        ready(function() {
+            AlipayJSBridge.call("tradePay", {
+                tradeNO: ali.trade_no
+            }, function(result) {
+                setTimeout(function(){window.paybtnflag = false;}, 1000);
+                if(!result){
+                    alert("支付系统异常，请稍后重试!");
+                    return false;
+                }
+                var resultMsgArr = new Array();
+                resultMsgArr['8000'] = '后台获取支付结果超时，暂时未收到支付结果';
+                resultMsgArr['6004'] = '支付过程中网络出错，暂时未收到支付结果';
+                resultMsgArr['7001'] = '客户端-包裹中止支付';
+                resultMsgArr['6002'] = '网络出错';
+                resultMsgArr['4000'] = '订单支付失败';
+                resultMsgArr['99'] = '用户点击记住密码快捷页面';
+
+                if(result.resultCode == '6001'){//1.用户中途取消
+                    failNotify(ali.failNotifyUrl);
+                    return false;
+                }
+                if(result.resultCode == '9000'){//2.支付完成跳转
+                    window.location.href = ali.url2;
+                    return false;
+                }
+                if(resultMsgArr.hasOwnProperty(result.resultCode)){//3.支付异常处理
+                    alert(resultMsgArr[result.resultCode]);
+                    return false;
+                }
+                if(!resultMsgArr.hasOwnProperty(result.resultCode)){//4.未知异常处理
+                    alert("其他支付异常");
+                    return false;
+                }
+            });
         });
     }
 
