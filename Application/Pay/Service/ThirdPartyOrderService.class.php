@@ -31,6 +31,7 @@ class ThirdPartyOrderService
             'size' => '100',
             'cashierNum' => 'all',
             'merchantNum' => $merchantNum,
+            'status' => 2,
             'startTime' => $startTime,
             'endTime' => $endTime,
         ];

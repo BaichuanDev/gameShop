@@ -39,7 +39,7 @@ class OrderMatchService
                     $this->log("时间匹配成功: 时间差 {$timeDiff} 秒");
                     
                     // 【条件3】状态检查（已支付）
-                    if (in_array($orderStatus, ['success', 'paid', '2', 2, 'SUCCESS', 'PAID'])) {
+                    if ($orderStatus == 2 || $orderStatus == '2') {
                         $this->log("状态匹配成功: {$orderStatus}");
                         
                         return [
@@ -49,7 +49,6 @@ class OrderMatchService
                             'money' => $orderMoney,
                             'status' => $orderStatus,
                             'pay_time' => isset($order['transTime']) ? $order['transTime'] : $order['transStart'],
-                            'raw_data' => $order
                         ];
                     } else {
                         $this->log("状态不匹配: {$orderStatus}（未支付）");

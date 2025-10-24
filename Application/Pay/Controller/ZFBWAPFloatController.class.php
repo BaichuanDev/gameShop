@@ -67,11 +67,11 @@ class ZFBWAPFloatController extends PayController
         $wrapperUrl = 'http://alipay.020leader.com/index.php?g=Wap&m=CashierPayfreeApi&a=pay&merchant_num=' . $return['mch_id'] . '&money=' . $floatMoney;
         $encodedUrl = urlencode($wrapperUrl);
         $alipayScheme = "alipays://platformapi/startapp?appId=20000067&url=" . $encodedUrl;
-        
-        $this->assign('alipayScheme', $alipayScheme);
-        $this->assign('wrapperUrl', $wrapperUrl);
-        $this->assign('floatMoney', $floatMoney);
-        $this->display("WeiXin/jft");
+        $info['pay_url'] = $alipayScheme;
+        $info['order_sn'] = $orderid;
+        $result = json_encode(['status' => 'success', 'msg' => '创建成功', 'data' => $info]);
+        echo $result;
+        exit;
     }
     
     /**
