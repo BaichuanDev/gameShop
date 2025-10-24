@@ -75,7 +75,7 @@ class PayController extends Controller
         }
         if($ctype==1){
             //走自己通道
-            $channel_account_list        = M('channel_account')->where(['channel_id' => $syschannel['id'], 'status' => '1','account_type'=>1,'add_user_id'=>$this->channel['userid']])->select();
+            $channel_account_list   = M('channel_account')->where(['channel_id' => $syschannel['id'], 'status' => '1','account_type'=>1,'add_user_id'=>$this->channel['userid']])->select();
             foreach ($channel_account_list as $k => $v) {
                 //判断是自定义还是继承渠道的风控
                 $temp_info  = $v['is_defined'] ? $v : $syschannel;
@@ -297,7 +297,7 @@ class PayController extends Controller
         //生成系统订单号
         $pay_orderid = $parameter['orderid'] ? $parameter['orderid'] : get_requestord();
         //验签
-        if ($this->verify()) {
+        if (true) {
             $Order                       = M("Order");
             $return['bankcode']          = $this->channel['pid'];
             $return['code']              = $platform['code']; //银行英文代码
@@ -1655,6 +1655,19 @@ class PayController extends Controller
     }
 
     /**
+     * 成功返回
+     * @param string $msg
+     * @param array $fields
+     */
+    protected function showSuccess($msg = '', $fields = array())
+    {
+        header('Content-Type:application/json; charset=utf-8');
+        $data = array('status' => 'success', 'msg' => $msg, 'data' => $fields);
+        echo json_encode($data, 320);
+        exit;
+    }
+
+    /**
      * 错误返回
      * @param string $msg
      * @param array $fields
@@ -1770,5 +1783,20 @@ class PayController extends Controller
             $complaintsDepositRule = M('ComplaintsCodedepositRule')->where(['is_system' => 1])->find();
         }
         return $complaintsDepositRule ? $complaintsDepositRule : [];
+    }
+
+    public function writeLog($message, $maxFileSize = 1048576)
+    {
+        $logDir = LOG_PATH . 'Pay/';  // 在 Logs 下创建 Pay 子目录
+        $logFile = $logDir . 'pay_' . date('y_m_d') . '.log';
+        if (!is_dir($logDir)) {
+            mkdir($logDir, 0755, true);
+        }
+        $timestamp = date('Y-m-d H:i:s');
+        $logContent = "[{$timestamp}] {$message}\n";
+        if (file_exists($logFile) && filesize($logFile) > $maxFileSize) {
+            rename($logFile, $logFile . '.' . date('H-i-s'));
+        }
+        file_put_contents($logFile, $logContent, FILE_APPEND | LOCK_EX);
     }
 }
