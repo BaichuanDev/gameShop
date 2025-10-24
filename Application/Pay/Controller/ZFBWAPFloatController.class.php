@@ -98,22 +98,24 @@ class ZFBWAPFloatController extends PayController
     }
     
     /**
-     * 保存订单映射信息
+     * 保存订单映射信息到数据库
      * @param array $data 映射数据
      */
     private function saveOrderMapping($data)
     {
-        $logDir = RUNTIME_PATH . 'Logs/OrderMapping/';
-        if (!is_dir($logDir)) {
-            mkdir($logDir, 0755, true);
-        }
+        $insertData = [
+            'order_id' => $data['order_id'],
+            'original_money' => $data['original_money'],
+            'float_money' => $data['float_money'],
+            'merchant_num' => $data['merchant_num'],
+            'status' => 0, // 0-待匹配
+            'poll_count' => 0,
+            'create_time' => $data['create_time'],
+        ];
         
-        $content = json_encode($data, JSON_UNESCAPED_UNICODE) . "\n";
-        file_put_contents(
-            $logDir . 'mapping_' . date('Y-m-d') . '.json',
-            $content,
-            FILE_APPEND | LOCK_EX
-        );
+        M('OrderFloatMapping')->add($insertData);
+        
+        $this->writeLog("订单映射已保存到数据库: {$data['order_id']}");
     }
     
     /**

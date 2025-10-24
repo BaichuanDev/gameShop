@@ -101,6 +101,12 @@ class OrderPollDaemon
         while ($attempts < $maxAttempts && time() < $expireTime) {
             $attempts++;
             
+            // 更新轮询次数到数据库
+            M('OrderFloatMapping')->where(['order_id' => $orderId])->save([
+                'poll_count' => $attempts,
+                'update_time' => date('Y-m-d H:i:s')
+            ]);
+            
             $this->log("[{$orderId}] 第 {$attempts}/{$maxAttempts} 次查询");
             
             // 查询第三方订单
