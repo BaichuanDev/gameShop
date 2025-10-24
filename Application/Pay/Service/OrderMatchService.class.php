@@ -24,8 +24,8 @@ class OrderMatchService
         
         foreach ($orderList as $order) {
             // 获取订单金额
-            $orderMoney = isset($order['money']) ? floatval($order['money']) : 0;
-            $orderTime = isset($order['create_time']) ? strtotime($order['create_time']) : 0;
+            $orderMoney = isset($order['totalFee']) ? floatval($order['totalFee']) : 0;
+            $orderTime = isset($order['transStart']) ? strtotime($order['transStart']) : 0;
             $orderStatus = isset($order['status']) ? $order['status'] : '';
             
             // 【条件1】金额匹配（精确到分）
@@ -39,16 +39,16 @@ class OrderMatchService
                     $this->log("时间匹配成功: 时间差 {$timeDiff} 秒");
                     
                     // 【条件3】状态检查（已支付）
-                    if (in_array($orderStatus, ['success', 'paid', '1', 1, 'SUCCESS', 'PAID'])) {
+                    if (in_array($orderStatus, ['success', 'paid', '2', 2, 'SUCCESS', 'PAID'])) {
                         $this->log("状态匹配成功: {$orderStatus}");
                         
                         return [
                             'matched' => true,
-                            'third_order_no' => isset($order['order_no']) ? $order['order_no'] : '',
-                            'trade_no' => isset($order['trade_no']) ? $order['trade_no'] : '',
+                            'third_order_no' => isset($order['orderNum']) ? $order['orderNum'] : '',
+                            'trade_no' => isset($order['orderNumOfficial']) ? $order['orderNumOfficial'] : '',
                             'money' => $orderMoney,
                             'status' => $orderStatus,
-                            'pay_time' => isset($order['pay_time']) ? $order['pay_time'] : $order['create_time'],
+                            'pay_time' => isset($order['transTime']) ? $order['transTime'] : $order['transStart'],
                             'raw_data' => $order
                         ];
                     } else {
@@ -72,47 +72,11 @@ class OrderMatchService
      */
     public function updateOrderStatus($orderId, $thirdData)
     {
-        $db = \Think\Db::getInstance();
-        
-        // 构建更新数据
-        $updateData = [
-            'pay_status' => 1,
-            'status' => 1,
-            'pay_time' => date('Y-m-d H:i:s'),
-            'update_time' => date('Y-m-d H:i:s')
-        ];
-        
-        // 添加第三方订单号
-        if (isset($thirdData['third_order_no'])) {
-            $updateData['third_order_no'] = $thirdData['third_order_no'];
-        }
-        if (isset($thirdData['trade_no'])) {
-            $updateData['trade_no'] = $thirdData['trade_no'];
-        }
-        if (isset($thirdData['pay_time'])) {
-            $updateData['pay_time'] = $thirdData['pay_time'];
-        }
-        
-        // 构建 SET 子句
-        $setClause = [];
-        foreach ($updateData as $key => $value) {
-            $setClause[] = "`{$key}` = '{$value}'";
-        }
-        $setStr = implode(', ', $setClause);
-        
-        // 执行更新（假设表名为 order）
-        $sql = "UPDATE __PREFIX__order SET {$setStr} WHERE pay_orderid = '{$orderId}'";
-        
         try {
-            $result = $db->execute($sql);
-            $this->log("订单状态更新成功: {$orderId}, 影响行数: {$result}");
-            
-            if ($result > 0) {
-                // ========== 调用支付成功处理逻辑 ==========
-                $this->processPaymentSuccess($orderId, $thirdData);
-            }
-            
-            return $result > 0;
+            // ========== 调用支付成功处理逻辑 ==========
+            $this->processPaymentSuccess($orderId, $thirdData);
+
+            return true;
         } catch (\Exception $e) {
             $this->log("订单状态更新失败: {$orderId}, 错误: " . $e->getMessage());
             return false;

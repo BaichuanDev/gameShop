@@ -19,7 +19,7 @@ class ZFBWAPFloatController extends PayController
         $this->at = C('ZFB'); // 获取支付宝的数组数据
         $this->queueService = new RedisQueueService();
     }
-    
+
     /**
      * 支付主流程
      */

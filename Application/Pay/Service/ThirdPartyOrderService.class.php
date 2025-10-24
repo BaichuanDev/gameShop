@@ -7,7 +7,7 @@ namespace Pay\Service;
  */
 class ThirdPartyOrderService
 {
-    private $baseUrl = 'http://alipay.020leader.com';
+    private $baseUrl = 'http://app.020leader.com';
     
     /**
      * 获取订单列表
@@ -25,12 +25,14 @@ class ThirdPartyOrderService
             $endTime = date('Y-m-d H:i:s');
         }
         
-        $url = $this->baseUrl . '/index.php?g=Wap&m=CashierPayfreeApi&a=getOrderList';
+        $url = $this->baseUrl . '/checkstand/v3/orderlist';
         
         $params = [
-            'merchant_num' => $merchantNum,
-            'start_time' => $startTime,
-            'end_time' => $endTime,
+            'size' => '100',
+            'cashierNum' => 'all',
+            'merchantNum' => $merchantNum,
+            'startTime' => $startTime,
+            'endTime' => $endTime,
         ];
         
         $fullUrl = $url . '?' . http_build_query($params);
@@ -71,14 +73,10 @@ class ThirdPartyOrderService
         
         // 根据实际返回格式调整
         // 假设返回格式：{"code": 0, "msg": "success", "data": {"list": [...]}}
-        if (isset($data['code']) && $data['code'] == 0 && isset($data['data']['list'])) {
-            return $data['data']['list'];
+        if (isset($data['resultCode']) && $data['resultCode'] == 'SUCCESS' && isset($data['resultData']['orderList'])) {
+            return $data['resultData']['orderList'];
         }
-        
-        // 或者直接返回列表
-        if (isset($data['list'])) {
-            return $data['list'];
-        }
+
         
         // 如果是数组直接返回
         if (is_array($data) && isset($data[0])) {
