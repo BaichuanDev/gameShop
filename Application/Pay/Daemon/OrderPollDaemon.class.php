@@ -82,6 +82,8 @@ class OrderPollDaemon
     private function processTask($task)
     {
         $orderId = isset($task['order_id']) ? $task['order_id'] : '';
+        $third_order_no = isset($task['third_order_no']) ? $task['third_order_no'] : '';
+        $type = isset($task['type']) ? $task['type'] : '';
         $floatMoney = isset($task['float_money']) ? $task['float_money'] : 0;
         $merchantNum = isset($task['merchant_num']) ? $task['merchant_num'] : '';
         $expireTime = isset($task['expire_time']) ? $task['expire_time'] : (time() + 180);
@@ -108,25 +110,47 @@ class OrderPollDaemon
             ]);
             
             $this->log("[{$orderId}] 第 {$attempts}/{$maxAttempts} 次查询");
-            
-            // 查询第三方订单
-            $orderList = $this->thirdPartyService->getOrderList($merchantNum);
-            
-            if (!empty($orderList)) {
-                $this->log("[{$orderId}] 获取到 " . count($orderList) . " 条订单");
-                
-                // 匹配订单
-                $matchResult = $this->matchService->matchByAmount($floatMoney, $orderList, $createTime);
-                
-                if ($matchResult) {
-                    $this->log("[{$orderId}] ✅ 匹配成功！");
-                    $this->handleSuccess($orderId, $matchResult, $task);
-                    return; // 完成任务
+            if($type == 1){
+                // 查询第三方订单
+                $orderList = $this->thirdPartyService->getOrderList($merchantNum);
+
+                if (!empty($orderList)) {
+                    $this->log("[{$orderId}] 获取到 " . count($orderList) . " 条订单");
+
+                    // 匹配订单
+                    $matchResult = $this->matchService->matchByAmount($floatMoney, $orderList, $createTime);
+
+                    if ($matchResult) {
+                        $this->log("[{$orderId}] ✅ 匹配成功！");
+                        $this->handleSuccess($orderId, $matchResult, $task);
+                        return; // 完成任务
+                    }
+                } else {
+                    $this->log("[{$orderId}] 第三方订单列表为空");
                 }
-            } else {
-                $this->log("[{$orderId}] 第三方订单列表为空");
+            }else{
+                // 查询第三方订单
+                $orderDetail = $this->thirdPartyService->getOrderDetail($merchantNum,$third_order_no);
+                if (!empty($orderDetail)) {
+                    $this->log("[{$orderId}] 获取订单详情成功");
+                    if($orderDetail['status'] == 2 || $orderDetail['status'] == '2'){
+                        $this->log("状态匹配成功: {$orderDetail['status'] }");
+                        $matchResult = [
+                            'matched' => true,
+                            'third_order_no' => isset($orderDetail['orderNum']) ? $orderDetail['orderNum'] : '',
+                            'trade_no' => isset($orderDetail['orderNumOfficial']) ? $orderDetail['orderNumOfficial'] : '',
+                            'money' => $orderDetail['totalFee'],
+                            'status' => $orderDetail['status'],
+                            'pay_time' => isset($orderDetail['transTime']) ? $orderDetail['transTime'] : $orderDetail['transStart'],
+                        ];
+                        $this->handleSuccess($orderId, $matchResult, $task);
+                    }
+
+                } else {
+                    $this->log("[{$orderId}] 第三方订单列表为空");
+                }
             }
-            
+
             // 检查是否需要继续
             if ($attempts >= $maxAttempts) {
                 $this->log("[{$orderId}] 达到最大尝试次数");

@@ -203,6 +203,7 @@ class ZFBWAPFloatController extends PayController
     {
         $task = [
             'order_id' => $orderid,
+            'type' => 1,
             'float_money' => $floatMoney,
             'merchant_num' => $merchantNum,
             'create_time' => time(),

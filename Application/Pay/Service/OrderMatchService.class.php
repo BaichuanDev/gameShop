@@ -59,7 +59,7 @@ class OrderMatchService
                         $this->log("状态不匹配: {$orderStatus}（未支付）");
                     }
                 } else {
-                    $this->log("时间不匹配: 时间差 {$timeDiff} 秒（超过10分钟）");
+                    $this->log("时间不匹配: 时间差 {$timeDiff} 秒（超过3分钟）");
                 }
             }
         }
@@ -67,7 +67,41 @@ class OrderMatchService
         $this->log("未找到匹配的订单");
         return null;
     }
-    
+
+
+    /**
+     * 根据订单号匹配订单
+     * @param float $floatMoney 浮动金额
+     * @param array orderDetail 第三方订单列表
+     * @param int $createTime 订单创建时间戳
+     * @return array|null 匹配到的订单数据
+     */
+    public function matchByOrderNo($third_order_no, $orderDetail)
+    {
+        if (empty($orderDetail)) {
+            return null;
+        }
+        $this->log("开始匹配订单，订单号:".$third_order_no);
+        // 获取订单状态
+        $orderStatus = isset($order['status']) ? $order['status'] : '';
+        // 【条件】状态检查（已支付）
+        if ($orderStatus == 2 || $orderStatus == '2') {
+            $this->log("状态匹配成功: {$orderStatus}");
+            return [
+                'matched' => true,
+                'third_order_no' => isset($order['orderNum']) ? $order['orderNum'] : '',
+                'trade_no' => isset($order['orderNumOfficial']) ? $order['orderNumOfficial'] : '',
+                'status' => $orderStatus,
+                'pay_time' => isset($order['transTime']) ? $order['transTime'] : $order['transStart'],
+            ];
+        } else {
+            $this->log("状态不匹配: {$orderStatus}（未支付）");
+        }
+
+        $this->log("未找到匹配的订单");
+        return null;
+    }
+
     /**
      * 更新订单状态并处理支付成功逻辑
      * @param string $orderId 本地订单号

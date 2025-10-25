@@ -96,11 +96,11 @@ class ThirdPartyOrderService
      */
     public function getOrderDetail($merchantNum, $orderNo)
     {
-        $url = $this->baseUrl . '/index.php?g=Wap&m=CashierPayfreeApi&a=getOrderDetail';
+        $url = $this->baseUrl . '/checkstand/v3/orderdetail';
         
         $params = [
-            'merchant_num' => $merchantNum,
-            'order_no' => $orderNo,
+            'merchantNum' => $merchantNum,
+            'orderNum' => $orderNo,
         ];
         
         $fullUrl = $url . '?' . http_build_query($params);
@@ -114,14 +114,23 @@ class ThirdPartyOrderService
         
         $response = curl_exec($ch);
         curl_close($ch);
-        
         $data = json_decode($response, true);
-        
-        if ($data && isset($data['data'])) {
-            return $data['data'];
+
+        if (!$data) {
+            $this->log("第三方接口响应解析失败: " . $response);
+            return [];
         }
-        
-        return null;
+        if (isset($data['resultCode']) && $data['resultCode'] == 'SUCCESS' && isset($data['resultData']['order'])) {
+            return $data['resultData']['order'];
+        }
+
+        // 如果是数组直接返回
+        if (is_array($data) && isset($data[0])) {
+            return $data;
+        }
+
+        $this->log("第三方接口返回格式不符合预期: " . json_encode($data, JSON_UNESCAPED_UNICODE));
+        return [];
     }
     
     /**
