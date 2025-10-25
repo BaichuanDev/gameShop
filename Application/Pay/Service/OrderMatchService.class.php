@@ -1,6 +1,7 @@
 <?php
 namespace Pay\Service;
 
+use Pay\Service\RedisQueueService;
 /**
  * 订单匹配服务类
  * 根据浮动金额匹配第三方订单，并更新数据库状态
@@ -33,15 +34,19 @@ class OrderMatchService
             if ($moneyDiff < 0.01) {
                 $this->log("金额匹配成功: {$orderMoney} ≈ {$floatMoney}");
                 
-                // 【条件2】时间匹配（10分钟内）
+                // 【条件2】时间匹配（3分钟内）
                 $timeDiff = abs($orderTime - $createTime);
-                if ($timeDiff <= 600) {
+                if ($timeDiff <= 180) {
                     $this->log("时间匹配成功: 时间差 {$timeDiff} 秒");
                     
                     // 【条件3】状态检查（已支付）
                     if ($orderStatus == 2 || $orderStatus == '2') {
                         $this->log("状态匹配成功: {$orderStatus}");
-                        
+
+                        $redisKey = "float_money:{$floatMoney}";
+                        $redis = (new RedisQueueService())->getRedis();
+                        $redis->del($redisKey);
+
                         return [
                             'matched' => true,
                             'third_order_no' => isset($order['orderNum']) ? $order['orderNum'] : '',

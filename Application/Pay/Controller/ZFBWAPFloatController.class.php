@@ -75,25 +75,100 @@ class ZFBWAPFloatController extends PayController
     }
     
     /**
-     * 生成浮动金额
+     * 生成浮动金额（上下浮动，确保3分钟内不重复）
      * @param float $originalMoney 原始金额
      * @param string $orderid 订单号
      * @return float 浮动金额
+     * 
+     * 示例：
+     * 原始金额 100 元
+     * 上浮动：100.01 ~ 100.99
+     * 下浮动：99.01 ~ 99.99
      */
     private function generateFloatMoney($originalMoney, $orderid)
     {
-        // 方案1：基于订单号生成固定偏移
-        $offset = (intval(substr($orderid, -4)) % 99 + 1) / 100;
+        $redis = $this->queueService->getRedis();
+        $maxRetries = 100; // 最多重试100次
+        $attempt = 0;
         
-        // 方案2：使用时间戳的毫秒部分
-        // $offset = (intval(microtime(true) * 100) % 99 + 1) / 100;
+        while ($attempt < $maxRetries) {
+            $attempt++;
+            
+            // 生成候选浮动金额
+            $floatMoney = $this->generateCandidateFloatMoney($originalMoney, $orderid, $attempt);
+            
+            // Redis key：用于检查该浮动金额是否在3分钟内已使用
+            $redisKey = "float_money:{$floatMoney}";
+            
+            // 尝试设置 Redis key（NX=不存在时才设置，EX=180秒过期）
+            $isUnique = $redis->set($redisKey, $orderid, ['NX', 'EX' => 180]);
+            
+            if ($isUnique) {
+                // 成功！该浮动金额在3分钟内未被使用
+                $this->writeLogs("订单 {$orderid} 金额浮动成功（第{$attempt}次尝试）: 原始 {$originalMoney} → {$floatMoney}");
+                return $floatMoney;
+            }
+            
+            // 该金额已被占用，记录日志并重试
+            $occupiedBy = $redis->get($redisKey);
+            $this->writeLogs("订单 {$orderid} 金额 {$floatMoney} 已被占用（被订单 {$occupiedBy} 使用），尝试重新生成");
+        }
         
-        // 方案3：随机生成（推荐用于测试）
-        // $offset = mt_rand(1, 99) / 100;
+        // 如果100次都失败了（极端情况），使用时间戳作为后备
+        $fallbackMoney = $this->generateFallbackFloatMoney($originalMoney);
+        $this->writeLogs("⚠️ 订单 {$orderid} 无法生成唯一浮动金额，使用后备方案: {$fallbackMoney}");
+        return $fallbackMoney;
+    }
+    
+    /**
+     * 生成候选浮动金额
+     * @param float $originalMoney 原始金额
+     * @param string $orderid 订单号
+     * @param int $attempt 尝试次数
+     * @return string 候选浮动金额
+     */
+    private function generateCandidateFloatMoney($originalMoney, $orderid, $attempt)
+    {
+        if ($attempt == 1) {
+            // 第1次尝试：基于订单号生成（保持原有逻辑）
+            $decimal = (intval(substr($orderid, -4)) % 99 + 1) / 100;
+            $fifthDigit = intval(substr($orderid, -5, 1));
+        } else {
+            // 第2次及以后：使用随机数 + 尝试次数偏移
+            $seed = intval(substr($orderid, -6)) + $attempt * 13; // 使用质数13避免规律
+            $decimal = ($seed % 99 + 1) / 100;
+            $fifthDigit = ($seed + $attempt) % 10;
+        }
         
-        $floatMoney = $originalMoney + $offset;
+        if ($fifthDigit % 2 == 0) {
+            // 偶数 → 上浮动
+            $floatMoney = $originalMoney + $decimal;
+        } else {
+            // 奇数 → 下浮动
+            $floatMoney = ($originalMoney - 1) + $decimal;
+        }
         
-        // 确保格式化为两位小数
+        return sprintf('%.2f', $floatMoney);
+    }
+    
+    /**
+     * 生成后备浮动金额（使用微秒时间戳）
+     * @param float $originalMoney 原始金额
+     * @return string 后备浮动金额
+     */
+    private function generateFallbackFloatMoney($originalMoney)
+    {
+        // 使用微秒时间戳的后3位作为小数
+        $microtime = microtime(true);
+        $decimal = (intval(($microtime * 1000)) % 99 + 1) / 100;
+        
+        // 随机决定上浮动或下浮动
+        if (mt_rand(0, 1) == 0) {
+            $floatMoney = $originalMoney + $decimal;
+        } else {
+            $floatMoney = ($originalMoney - 1) + $decimal;
+        }
+        
         return sprintf('%.2f', $floatMoney);
     }
     

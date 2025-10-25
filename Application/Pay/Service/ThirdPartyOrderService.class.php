@@ -19,7 +19,7 @@ class ThirdPartyOrderService
     public function getOrderList($merchantNum, $startTime = null, $endTime = null)
     {
         if (!$startTime) {
-            $startTime = date('Y-m-d H:i:s', time() - 600); // 默认查询10分钟内
+            $startTime = date('Y-m-d H:i:s', time() - 180); // 默认查询10分钟内
         }
         if (!$endTime) {
             $endTime = date('Y-m-d H:i:s');
