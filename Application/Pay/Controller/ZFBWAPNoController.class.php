@@ -1,5 +1,5 @@
 <?php
-
+namespace Pay\Controller;
 
 use Pay\Service\RedisQueueService;
 
@@ -7,14 +7,14 @@ use Pay\Service\RedisQueueService;
  * 支付宝 WAP 支付控制器（浮动金额版本）
  * 继承原控制器，新增订单号和异步轮询功能
  */
-class ZFBWAPNoController extends \Pay\Controller\PayController
+class ZFBWAPNoController extends PayController
 {
     protected $at;
     private $queueService;
     
     public function __construct()
     {
-        \Pay\Controller\PayController::__construct();
+        parent::__construct();
         $this->at = C('ZFB'); // 获取支付宝的数组数据
         $this->queueService = new RedisQueueService();
     }
@@ -42,11 +42,7 @@ class ZFBWAPNoController extends \Pay\Controller\PayController
         );
         
         $return = $this->orderadd($parameter); // 生成系统订单
-        
 
-        
-
-        
         // ========== 生成支付链接 ==========
         $response = $this->culRequest($originalMoney);
         if($response['code'] == 1){
@@ -55,7 +51,7 @@ class ZFBWAPNoController extends \Pay\Controller\PayController
             $query = parse_url($response['failNotifyUrl'], PHP_URL_QUERY);
             $params = [];
             parse_str($query, $params);
-            $orderNum = $params['orderNum'] ?? null;
+            $orderNum = isset($params['orderNum']) ? $params['orderNum'] : null;
 
             // ========== 保存订单映射 ==========
             $this->saveOrderMapping([

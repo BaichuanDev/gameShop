@@ -132,7 +132,7 @@ class OrderPollDaemon
                 // 查询第三方订单
                 $orderDetail = $this->thirdPartyService->getOrderDetail($merchantNum,$third_order_no);
                 if (!empty($orderDetail)) {
-                    $this->log("[{$orderId}] 获取订单详情成功");
+                    $this->log("[{$orderId}] 获取订单详情成功!订单".$third_order_no.'状态:'.$orderDetail['status']);
                     if($orderDetail['status'] == 2 || $orderDetail['status'] == '2'){
                         $this->log("状态匹配成功: {$orderDetail['status'] }");
                         $matchResult = [
