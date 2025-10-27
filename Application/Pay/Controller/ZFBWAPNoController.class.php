@@ -54,18 +54,10 @@ class ZFBWAPNoController extends PayController
             $orderNum = isset($params['orderNum']) ? $params['orderNum'] : null;
 
             // ========== 保存订单映射 ==========
-            $this->saveOrderMapping([
-                'order_id' => $orderid,
-                'original_money' => $originalMoney,
-                'float_money' => $originalMoney,
-                'merchant_num' => $return['mch_id'],
-                'third_order_no' => $orderNum,
-                'create_time' => date('Y-m-d H:i:s'),
-                'status' => 'pending'
-            ]);
+            $Order = M("Order");
+            $Order->where(['pay_orderid'=>$orderid])->save(['third_order_no'=>$orderNum]);
             // ========== 推送到 Redis 队列 ==========
             $this->pushToQueue($orderid, $originalMoney, $return['mch_id'],$orderNum);
-
             $info['pay_url'] = $alipayScheme;
             $info['order_sn'] = $orderid;
             $result = json_encode(['status' => 'success', 'msg' => '创建成功', 'data' => $info]);
@@ -76,31 +68,7 @@ class ZFBWAPNoController extends PayController
         }
 
     }
-    
 
-
-
-    /**
-     * 保存订单映射信息到数据库
-     * @param array $data 映射数据
-     */
-    private function saveOrderMapping($data)
-    {
-        $insertData = [
-            'order_id' => $data['order_id'],
-            'original_money' => $data['original_money'],
-            'float_money' => $data['float_money'],
-            'merchant_num' => $data['merchant_num'],
-            'third_order_no' => $data['third_order_no'],
-            'status' => 0, // 0-待匹配
-            'poll_count' => 0,
-            'create_time' => $data['create_time'],
-        ];
-        
-        M('OrderFloatMapping')->add($insertData);
-        
-        $this->writeLog("订单映射已保存到数据库: {$data['order_id']}");
-    }
     
     /**
      * 推送任务到 Redis 队列
@@ -112,7 +80,6 @@ class ZFBWAPNoController extends PayController
     {
         $task = [
             'order_id' => $orderid,
-            'type' => 2,
             'float_money' => $floatMoney,
             'third_order_no' => $orderNum,
             'merchant_num' => $merchantNum,

@@ -120,57 +120,23 @@ class OrderMatchService
             return false;
         }
     }
-    
+
     /**
-     * 处理支付成功后的逻辑（EditMoney + 分账/转账）
-     * @param string $orderId 订单号
-     * @param array $thirdData 第三方订单数据
+     * 处理支付成功后的逻辑（EditMoney）
+     * @param $orderId
+     * @return bool
      */
-    private function processPaymentSuccess($orderId, $thirdData)
+    public function processPaymentSuccess($orderId)
     {
         try {
             $this->log("开始处理支付成功逻辑: {$orderId}");
-            
-            // 获取订单信息
-            $m_Order    = M("Order");
-            $orderInfo = $m_Order->where(['pay_orderid' => $orderId])->find(); //获取订单信息
-
-            if (!$orderInfo) {
-                $this->log("订单不存在: {$orderId}");
-                return;
-            }
-            
-            // 获取账户信息
-            $account = M('ChannelAccount')->where(['id' => $orderInfo['account_id']])->field('fenzhuanzhang')->find();
-            
             // ========== 调用 EditMoney 方法 ==========
             $this->callEditMoney($orderId, '', 0);
-            
-            // ========== 处理分账或转账 ==========
-            if ($account && $account['fenzhuanzhang'] == 1) {
-                // 分账
-                $this->log("订单 {$orderId} 需要分账");
-                $data = [
-                    'separate_orderid' => $orderId,
-                    'separate_trade_no' => isset($thirdData['trade_no']) ? $thirdData['trade_no'] : '',
-                ];
-                R("Separate/index", [$data]);
-                $this->log("分账处理完成: {$orderId}");
-                
-            } elseif ($account && $account['fenzhuanzhang'] == 2) {
-                // 转账
-                $this->log("订单 {$orderId} 需要转账");
-                $data = [
-                    'transfer_orderid' => $orderId,
-                ];
-                R("Transfer/index", [$data]);
-                $this->log("转账处理完成: {$orderId}");
-            }
-            
             $this->log("支付成功处理完成: {$orderId}");
-            
+            return true;
         } catch (\Exception $e) {
             $this->log("支付成功处理异常: {$orderId}, 错误: " . $e->getMessage());
+            return false;
         }
     }
     
@@ -201,42 +167,9 @@ class OrderMatchService
         }
     }
     
-    /**
-     * 保存成功记录到数据库
-     * @param string $orderId 订单号
-     * @param array $data 订单数据
-     */
-    public function saveSuccessLog($orderId, $data)
-    {
-        $updateData = [
-            'third_order_no' => isset($data['third_order_no']) ? $data['third_order_no'] : '',
-            'third_trade_no' => isset($data['trade_no']) ? $data['trade_no'] : '',
-            'status' => 1,
-            'match_time' => date('Y-m-d H:i:s'),
-            'update_time' => date('Y-m-d H:i:s')
-        ];
-        
-        M('OrderFloatMapping')->where(['order_id' => $orderId])->save($updateData);
-        
-        $this->log("订单匹配成功，已更新映射表: {$orderId}");
-    }
+
     
-    /**
-     * 保存超时记录到数据库
-     * @param string $orderId 订单号
-     * @param array $taskData 任务数据
-     */
-    public function saveTimeoutLog($orderId, $taskData = [])
-    {
-        $updateData = [
-            'status' => 2,
-            'update_time' => date('Y-m-d H:i:s')
-        ];
-        
-        M('OrderFloatMapping')->where(['order_id' => $orderId])->save($updateData);
-        
-        $this->log("订单轮询超时，已更新映射表: {$orderId}");
-    }
+
     
     /**
      * 记录日志

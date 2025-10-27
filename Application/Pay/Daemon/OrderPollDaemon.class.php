@@ -3,17 +3,17 @@ namespace Pay\Daemon;
 
 use Pay\Service\RedisQueueService;
 use Pay\Service\ThirdPartyOrderService;
-use Pay\Service\OrderMatchService;
+
 
 /**
  * 订单轮询守护进程
- * 从 Redis 队列获取任务，执行3分钟轮询，匹配第三方订单
+ * 从 Redis 队列获取任务，执行5分钟轮询，匹配第三方订单
  */
 class OrderPollDaemon
 {
     private $queueService;
     private $thirdPartyService;
-    private $matchService;
+
     private $running = true;
     private $queueName = 'order_poll_queue';
     
@@ -21,7 +21,7 @@ class OrderPollDaemon
     {
         $this->queueService = new RedisQueueService();
         $this->thirdPartyService = new ThirdPartyOrderService();
-        $this->matchService = new OrderMatchService();
+
         
         // 注册信号处理（优雅退出）
         if (function_exists('pcntl_signal')) {
@@ -47,7 +47,6 @@ class OrderPollDaemon
             try {
                 // 从队列取出任务（阻塞5秒）
                 $task = $this->queueService->pop($this->queueName, 5);
-                
                 if ($task) {
                     $idleCount = 0;
                     $this->log("接收到新任务: " . json_encode($task, JSON_UNESCAPED_UNICODE));
@@ -59,7 +58,6 @@ class OrderPollDaemon
                         $this->log("等待任务中... (队列长度: {$queueLen})");
                     }
                 }
-                
                 // 处理信号
                 if (function_exists('pcntl_signal_dispatch')) {
                     pcntl_signal_dispatch();
@@ -83,93 +81,91 @@ class OrderPollDaemon
     {
         $orderId = isset($task['order_id']) ? $task['order_id'] : '';
         $third_order_no = isset($task['third_order_no']) ? $task['third_order_no'] : '';
-        $type = isset($task['type']) ? $task['type'] : '';
         $floatMoney = isset($task['float_money']) ? $task['float_money'] : 0;
         $merchantNum = isset($task['merchant_num']) ? $task['merchant_num'] : '';
         $expireTime = isset($task['expire_time']) ? $task['expire_time'] : (time() + 180);
-        $createTime = isset($task['create_time']) ? $task['create_time'] : time();
-        
         if (!$orderId || !$floatMoney || !$merchantNum) {
             $this->log("任务数据不完整，跳过: " . json_encode($task, JSON_UNESCAPED_UNICODE));
             return;
         }
-        
         $this->log("开始处理订单: {$orderId}, 金额: {$floatMoney}, 商户号: {$merchantNum}");
-        
-        $attempts = 0;
-        $maxAttempts = 36; // 3分钟 / 5秒 = 36次
-        $pollInterval = 5; // 每5秒查询一次
-        
-        while ($attempts < $maxAttempts && time() < $expireTime) {
-            $attempts++;
-            
-            // 更新轮询次数到数据库
-            M('OrderFloatMapping')->where(['order_id' => $orderId])->save([
-                'poll_count' => $attempts,
-                'update_time' => date('Y-m-d H:i:s')
-            ]);
-            
-            $this->log("[{$orderId}] 第 {$attempts}/{$maxAttempts} 次查询");
-            if($type == 1){
-                // 查询第三方订单
-                $orderList = $this->thirdPartyService->getOrderList($merchantNum);
 
-                if (!empty($orderList)) {
-                    $this->log("[{$orderId}] 获取到 " . count($orderList) . " 条订单");
+        // ========== 获取 Redis 锁 ==========
+        $redis = $this->queueService->getRedis();
+        $lockKey = "order_lock:{$orderId}";
+        $lockValue = uniqid(getmypid() . '_', true);
 
-                    // 匹配订单
-                    $matchResult = $this->matchService->matchByAmount($floatMoney, $orderList, $createTime);
+        // 尝试加锁（NX=不存在才设置，EX=300秒过期）
+        $locked = $redis->set($lockKey, $lockValue, ['NX', 'EX' => 300]);
 
-                    if ($matchResult) {
-                        $this->log("[{$orderId}] ✅ 匹配成功！");
-                        $this->handleSuccess($orderId, $matchResult, $task);
-                        return; // 完成任务
-                    }
-                } else {
-                    $this->log("[{$orderId}] 第三方订单列表为空");
-                }
-            }else{
+        if (!$locked) {
+            // 获取锁失败，其他进程正在处理
+            $this->log("[{$orderId}] 其他进程正在处理，跳过");
+            return;
+        }
+
+        $this->log("[{$orderId}] ✅ 成功获取处理锁");
+
+        try {
+            // ========== 检查订单是否已支付 ==========
+            $Order = M("Order");
+            $orderInfo = $Order->where(['pay_orderid' => $orderId])->find();
+            if ($orderInfo && ($orderInfo['pay_status'] == 1 || $orderInfo['pay_status'] == 2)) {
+                $this->log("[{$orderId}] 订单已支付，跳过处理");
+                return; // 注意：finally 中会释放锁
+            }
+            $attempts = 0;
+            $maxAttempts = 60; // 3分钟 / 3秒 = 100次
+            $pollInterval = 3; // 每3秒查询一次
+
+            while ($attempts < $maxAttempts && time() < $expireTime) {
+                $attempts++;
+                $this->log("[{$orderId}] 第 {$attempts}/{$maxAttempts} 次查询");
                 // 查询第三方订单
                 $orderDetail = $this->thirdPartyService->getOrderDetail($merchantNum,$third_order_no);
                 if (!empty($orderDetail)) {
                     $this->log("[{$orderId}] 获取订单详情成功!订单".$third_order_no.'状态:'.$orderDetail['status']);
                     if($orderDetail['status'] == 2 || $orderDetail['status'] == '2'){
-                        $this->log("状态匹配成功: {$orderDetail['status'] }");
-                        $matchResult = [
-                            'matched' => true,
-                            'third_order_no' => isset($orderDetail['orderNum']) ? $orderDetail['orderNum'] : '',
-                            'trade_no' => isset($orderDetail['orderNumOfficial']) ? $orderDetail['orderNumOfficial'] : '',
-                            'money' => $orderDetail['totalFee'],
-                            'status' => $orderDetail['status'],
-                            'pay_time' => isset($orderDetail['transTime']) ? $orderDetail['transTime'] : $orderDetail['transStart'],
-                        ];
-                        $this->handleSuccess($orderId, $matchResult, $task);
-                        return; // 完成任务
+                        $this->log("[{$orderId}]状态匹配成功: {$orderDetail['status'] }");
+                        $this->handleSuccess($orderId);
+                        break; // 完成任务
                     }
-
                 } else {
                     $this->log("[{$orderId}] 第三方订单列表为空");
                 }
-            }
 
-            // 检查是否需要继续
-            if ($attempts >= $maxAttempts) {
-                $this->log("[{$orderId}] 达到最大尝试次数");
-                break;
+                // 检查是否需要继续
+                if ($attempts >= $maxAttempts) {
+                    $this->log("[{$orderId}] 达到最大尝试次数");
+                    break;
+                }
+
+                if (time() >= $expireTime) {
+                    $this->log("[{$orderId}] 任务已过期");
+                    break;
+                }
+                // ========== 检查锁是否还持有（建议添加）==========
+                if (!$this->checkLockOwnership($redis, $lockKey, $lockValue)) {
+                    $this->log("[{$orderId}] ⚠️ 锁已失效，停止处理");
+                    break;
+                }
+                // 等待下一次查询
+                sleep($pollInterval);
             }
-            
-            if (time() >= $expireTime) {
-                $this->log("[{$orderId}] 任务已过期");
-                break;
+            // 如果没有成功，记录超时
+            if ($attempts >= $maxAttempts || time() >= $expireTime) {
+                $this->log("[{$orderId}] ⏰ 轮询超时，未找到匹配订单");
+                $this->handleTimeout($orderId);
             }
-            
-            // 等待下一次查询
-            sleep($pollInterval);
+        } catch (\Exception $e) {
+            $this->log("[{$orderId}] 处理异常: " . $e->getMessage());
+
+        } finally {
+            // 释放锁（使用 Lua 脚本）
+            $this->releaseLock($redis, $lockKey, $lockValue);
         }
-        
-        // 超时处理
-        $this->log("[{$orderId}] ⏰ 轮询超时，未找到匹配订单");
-        $this->handleTimeout($orderId, $task);
+
+
     }
     
     /**
@@ -178,34 +174,71 @@ class OrderPollDaemon
      * @param array $matchResult 匹配结果
      * @param array $taskData 任务数据
      */
-    private function handleSuccess($orderId, $matchResult, $taskData)
+    private function handleSuccess($orderId)
     {
         // 更新数据库状态
-        $updated = $this->matchService->updateOrderStatus($orderId, $matchResult);
-        
+        $updated = $this->processPaymentSuccess($orderId);
         if ($updated) {
             $this->log("[{$orderId}] 订单状态更新成功");
         } else {
             $this->log("[{$orderId}] ⚠️ 订单状态更新失败");
         }
-        
-        // 保存成功日志
-        $logData = array_merge($taskData, $matchResult);
-        $this->matchService->saveSuccessLog($orderId, $logData);
-        
-        $this->log("[{$orderId}] 任务处理完成");
+
     }
-    
+
+    /**
+     * 处理支付成功后的逻辑（EditMoney）
+     * @param $orderId
+     * @return bool
+     */
+    public function processPaymentSuccess($orderId)
+    {
+        try {
+            $this->log("开始处理支付成功逻辑: {$orderId}");
+            // ========== 调用 EditMoney 方法 ==========
+            $this->callEditMoney($orderId, '', 0);
+            $this->log("支付成功处理完成: {$orderId}");
+            return true;
+        } catch (\Exception $e) {
+            $this->log("支付成功处理异常: {$orderId}, 错误: " . $e->getMessage());
+            return false;
+        }
+    }
+    /**
+     * 调用 EditMoney 方法
+     * @param string $orderId 订单号
+     * @param string $payName 支付方式名称
+     * @param int $returnType 返回类型
+     */
+    private function callEditMoney($orderId, $payName = '', $returnType = 0)
+    {
+        try {
+            $this->log("调用 EditMoney: {$orderId}");
+
+            // 实例化支付控制器
+            $payController = new \Pay\Controller\ZFBWAPFloatController();
+
+            // 通过反射调用 protected 方法
+            $reflection = new \ReflectionClass($payController);
+            $method = $reflection->getMethod('EditMoney');
+            $method->setAccessible(true);
+            $method->invoke($payController, $orderId, $payName, $returnType, '');
+
+            $this->log("EditMoney 调用成功: {$orderId}");
+
+        } catch (\Exception $e) {
+            $this->log("EditMoney 调用失败: {$orderId}, 错误: " . $e->getMessage());
+        }
+    }
+
     /**
      * 处理超时
      * @param string $orderId 订单号
      * @param array $taskData 任务数据
      */
-    private function handleTimeout($orderId, $taskData)
+    private function handleTimeout($orderId)
     {
-        // 保存超时日志
-        $this->matchService->saveTimeoutLog($orderId, $taskData);
-        
+
         $this->log("[{$orderId}] 超时任务已记录");
     }
     
@@ -242,7 +275,39 @@ class OrderPollDaemon
         // 输出到控制台
         echo $content;
     }
-    
+
+
+    /**
+     * 释放 Redis 锁（Lua 脚本保证原子性）
+     */
+    private function releaseLock($redis, $lockKey, $lockValue)
+    {
+        $script = "                                                                                                                                                                                               
+             if redis.call('get', KEYS[1]) == ARGV[1] then                                                                                                                                                         
+                 return redis.call('del', KEYS[1])                                                                                                                                                                 
+             else                                                                                                                                                                                                  
+                 return 0                                                                                                                                                                                          
+             end                                                                                                                                                                                                   
+         ";
+
+        $result = $redis->eval($script, [$lockKey, $lockValue], 1);
+
+        if ($result == 1) {
+            $orderId = str_replace('order_lock:', '', $lockKey);
+            $this->log("[{$orderId}] 🔓 已释放处理锁");
+        }
+    }
+
+
+    /**
+     * 检查锁是否还由当前进程持有
+     */
+    private function checkLockOwnership($redis, $lockKey, $lockValue)
+    {
+        $currentValue = $redis->get($lockKey);
+        return $currentValue === $lockValue;
+    }
+
     /**
      * 获取队列状态信息
      * @return array
