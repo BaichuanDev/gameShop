@@ -132,8 +132,9 @@ class OrderMatchService
             $this->log("开始处理支付成功逻辑: {$orderId}");
             
             // 获取订单信息
-            $orderInfo = M("Order")->where(['pay_orderid' => $orderId])->find();
-            
+            $m_Order    = M("Order");
+            $orderInfo = $m_Order->where(['pay_orderid' => $orderId])->find(); //获取订单信息
+
             if (!$orderInfo) {
                 $this->log("订单不存在: {$orderId}");
                 return;

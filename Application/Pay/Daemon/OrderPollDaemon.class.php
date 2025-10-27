@@ -144,6 +144,7 @@ class OrderPollDaemon
                             'pay_time' => isset($orderDetail['transTime']) ? $orderDetail['transTime'] : $orderDetail['transStart'],
                         ];
                         $this->handleSuccess($orderId, $matchResult, $task);
+                        return; // 完成任务
                     }
 
                 } else {
