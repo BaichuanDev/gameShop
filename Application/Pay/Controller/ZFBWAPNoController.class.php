@@ -11,12 +11,15 @@ class ZFBWAPNoController extends PayController
 {
     protected $at;
     private $queueService;
+
+    private $generateKey;
     
     public function __construct()
     {
         parent::__construct();
         $this->at = C('ZFB'); // 获取支付宝的数组数据
         $this->queueService = new RedisQueueService();
+        $this->generateKey = ''; //初始化
     }
 
     /**
@@ -44,20 +47,16 @@ class ZFBWAPNoController extends PayController
         $return = $this->orderadd($parameter); // 生成系统订单
 
         // ========== 生成支付链接 ==========
-        $response = $this->culRequest($originalMoney);
-        if($response['code'] == 1){
-            $encodedUrl = urlencode($response['url']);
-            $alipayScheme = "alipays://platformapi/startapp?appId=20000067&url=" . $encodedUrl;
-            $query = parse_url($response['failNotifyUrl'], PHP_URL_QUERY);
-            $params = [];
-            parse_str($query, $params);
-            $orderNum = isset($params['orderNum']) ? $params['orderNum'] : null;
+        $response = $this->culRequest($originalMoney,$return['mch_id']);
+        if($response['code'] == 'SUCCESS'){
+
+            $alipayScheme = "alipays://platformapi/startapp?appId=2021005130643619&pages/remotepayment/gater_remotepayment?share_openid=2088970224809018&paytoken=".$this->generateKey."&money=".$originalMoney."&remarks=&share_userifo=?%5CavatarUrl%5C=%5C%5C&%5CnickName%5C=null&%5Cavatar%5C=null&expire_time=1761633604477&merchant_num=000000000300808&enbsv=0.2.2504171609.27&chInfo=ch_share__chsub_qrcode&fxzjshareChinfo=ch_share__chsub_qrcode&shareTimestamp=1761631804790&apshareid=96a3dcff-1aaf-4b58-bc55-8f998c1bf088&shareBizType=H5App_XCX";
 
             // ========== 保存订单映射 ==========
-            $Order = M("Order");
-            $Order->where(['pay_orderid'=>$orderid])->save(['third_order_no'=>$orderNum]);
+//            $Order = M("Order");
+//            $Order->where(['pay_orderid'=>$orderid])->save(['third_order_no'=>$orderNum]);
             // ========== 推送到 Redis 队列 ==========
-            $this->pushToQueue($orderid, $originalMoney, $return['mch_id'],$orderNum);
+            //$this->pushToQueue($orderid, $originalMoney, $return['mch_id'],$orderNum);
             $info['pay_url'] = $alipayScheme;
             $info['order_sn'] = $orderid;
             $result = json_encode(['status' => 'success', 'msg' => '创建成功', 'data' => $info]);
@@ -107,28 +106,36 @@ class ZFBWAPNoController extends PayController
         file_put_contents($logDir . 'payment_' . date('Y-m-d') . '.log', $content, FILE_APPEND | LOCK_EX);
     }
 
-    public function culRequest($money)
+    public function culRequest($money,$merchantNum)
     {
-        $url = 'http://alipay.020leader.com/wxpay/index.php';
+        $this->generateKey();
+        $centAmount = intval($money * 100);
+        $url = 'http://b.020leader.com/business-platform/payment/remote-collection/save-order-data';
         $params = [
-            'g' => 'Wap',
-            'm' => 'WeixinfreeBank',
-            'a' => 'new_pay',
-            'online' => 1,
-            'version' => '3.0',
-            'token' => 'vigpuk1760521609',
-            'cid' => '290329',
-            'payfreemoney' => $money,
+            'pay_client' => 2,
+            'request_id' => $this->generateKey,
+            'merchant_num' => $merchantNum,
+            'share_id' => "2088970224809018",
+            'share_nickname' => null,
+            'share_remark' => '',
+            'pay_fee' => $centAmount,
+            'cashier_num' => 'remotepayment',
+        ];
+        $header = [
+            'User-Agent: ozilla/5.0 (Linux; Android 12; V2241HA Build/W528JS; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.6478.122 MYWeb/1.3.126.251011180536 UWS/3.22.2.9999 UCBS/3.22.2.9999_220000000000 Mobile Safari/537.36 NebulaSDK/1.8.100112 Nebula AlipayDefined(nt:WIFI,ws:480|0|3.0) AliApp(AP/10.7.90.8100) AlipayClient/10.7.90.8100 Language/zh-Hans isConcaveScreen/false Region/CNAriver/10.7.90.8100 ChannelId(26)',
+            'Content-Type: application/json',
+            'Host: b.020leader.com'
         ];
 
-        $fullUrl = $url . '?' . http_build_query($params);
-
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $fullUrl);
+        curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch,CURLOPT_POST,1);
+        curl_setopt($ch,CURLOPT_POSTFIELDS,$params);
+        curl_setopt($ch,CURLOPT_HTTPHEADER,$header);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -146,7 +153,39 @@ class ZFBWAPNoController extends PayController
     }
 
 
+    public function generateKey()
+    {
+        $getKeyUrl = 'https://b.020leader.com/business-platform/payment/gateway/order/generate-key?salt=2088970224809018';
+        $getHeader = [
+            'User-Agent: Mozilla/5.0 (Linux; Android 12; V2241HA Build/W528JS; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.6478.122 MYWeb/1.3.126.251011180536 UWS/3.22.2.9999 UCBS/3.22.2.9999_220000000000 Mobile Safari/537.36 NebulaSDK/1.8.100112 Nebula AlipayDefined(nt:WIFI,ws:480|0|3.0) AliApp(AP/10.7.90.8100) AlipayClient/10.7.90.8100 Language/zh-Hans isConcaveScreen/false Region/CNAriver/10.7.90.8100 ChannelId(26) DTN/2.0',
+            'Host: b.020leader.com'
+        ];
 
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $getKeyUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch,CURLOPT_HTTPHEADER,$getHeader);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($httpCode != 200 || !$response) {
+            $this->log("第三方接口获取key请求失败: HTTP {$httpCode}, Error: {$error}");
+            return [];
+        }
+        $this->writeLogs("第三方获取key请求结果返回".$response);
+        $data = json_decode($response, true);
+        if($data['code'] == 'SUCCESS'){
+            $this->generateKey = $data['data']['key'];
+        }else{
+            $this->generateKey = md5('2088970224809018');
+        }
+    }
 
     /**
      * 异步通知（继承原方法）
